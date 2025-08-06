@@ -1,454 +1,442 @@
 // frontend/src/pages/MonitoreoEstrategico.js
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../utils/api';
+import monitoringService from '../services/monitoringService';
 import Card from '../components/Common/Card';
 import Button from '../components/Common/Button';
+import Badge from '../components/Common/Badge';
 import Alert from '../components/Common/Alert';
 import Loading from '../components/Common/Loading';
+import Modal from '../components/Common/Modal';
+import { 
+  BellIcon, 
+  RefreshIcon, 
+  FilterIcon,
+  ExclamationIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ClockIcon,
+  DocumentTextIcon,
+  LinkIcon,
+  CalendarIcon
+} from '@heroicons/react/outline';
 
 const MonitoreoEstrategico = () => {
   const { user } = useAuth();
-  const [alertas, setAlertas] = useState([]);
-  const [fuentes, setFuentes] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState('todas');
-  const [showNewAlertForm, setShowNewAlertForm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    active: 0,
+    archived: 0
+  });
 
   useEffect(() => {
     loadData();
-  }, [filtro]);
+  }, [filter]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const params = filtro === 'todas' ? '' : filtro;
-      const [alertasRes, fuentesRes] = await Promise.all([
-        api.get(`/monitoreo/alertas?prioridad=${params}`),
-        api.get('/monitoreo/fuentes')
+      const [alertsData, sourcesData] = await Promise.all([
+        monitoringService.getAlerts({ status: filter }),
+        monitoringService.getSources()
       ]);
+
+      setAlerts(alertsData.alerts || []);
+      setSources(sourcesData.sources || []);
       
-      setAlertas(alertasRes.data.alertas || []);
-      setFuentes(fuentesRes.data.fuentes || []);
-    } catch (error) {
-      console.error('Error al cargar datos:', error);
+      // Calcular estadísticas
+      const alertStats = alertsData.alerts.reduce((acc, alert) => {
+        acc.total++;
+        acc[alert.priority]++;
+        acc[alert.status]++;
+        return acc;
+      }, {
+        total: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        active: 0,
+        archived: 0
+      });
+      
+      setStats(alertStats);
+    } catch (err) {
+      setError('Error al cargar las alertas');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMarcarLeida = async (alertaId) => {
+  const handleRefresh = async () => {
     try {
-      await api.patch(`/monitoreo/alertas/${alertaId}/leida`);
-      loadData();
-    } catch (error) {
-      console.error('Error al marcar alerta:', error);
+      setRefreshing(true);
+      setError('');
+      await monitoringService.checkSources();
+      await loadData();
+      setSuccess('Fuentes actualizadas correctamente');
+    } catch (err) {
+      setError('Error al actualizar las fuentes');
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  const handleActivarProtocolo = async (alertaId, protocolo) => {
+  const handleArchiveAlert = async (alertId) => {
     try {
-      await api.post(`/monitoreo/alertas/${alertaId}/protocolo`, { protocolo });
-      loadData();
-    } catch (error) {
-      console.error('Error al activar protocolo:', error);
+      await monitoringService.archiveAlert(alertId);
+      setAlerts(alerts.filter(a => a.id !== alertId));
+      setSuccess('Alerta archivada correctamente');
+    } catch (err) {
+      setError('Error al archivar la alerta');
     }
   };
 
-  const getPrioridadColor = (prioridad) => {
-    switch (prioridad) {
-      case 'critica':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'importante':
-        return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'normal':
-        return 'bg-green-100 text-green-800 border-green-300';
+  const handleViewAlert = (alert) => {
+    setSelectedAlert(alert);
+    setShowModal(true);
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high':
+        return 'red';
+      case 'medium':
+        return 'yellow';
+      case 'low':
+        return 'blue';
       default:
-        return 'bg-slate-100 text-slate-800 border-slate-300';
+        return 'gray';
     }
   };
 
-  const getProtocoloInfo = (protocolo) => {
-    switch (protocolo) {
-      case 'verde':
-        return { 
-          emoji: '🟢', 
-          text: 'VERDE: Monitoreo continuo', 
-          color: 'text-green-600' 
-        };
-      case 'amarillo':
-        return { 
-          emoji: '🟡', 
-          text: 'AMARILLO: Evaluación en 24h', 
-          color: 'text-yellow-600' 
-        };
-      case 'rojo':
-        return { 
-          emoji: '🔴', 
-          text: 'ROJO: Acción inmediata', 
-          color: 'text-red-600' 
-        };
+  const getPriorityIcon = (priority) => {
+    switch (priority) {
+      case 'high':
+        return <ExclamationIcon className="h-5 w-5" />;
+      case 'medium':
+        return <ClockIcon className="h-5 w-5" />;
+      case 'low':
+        return <CheckCircleIcon className="h-5 w-5" />;
       default:
-        return { 
-          emoji: '⚪', 
-          text: 'Sin protocolo', 
-          color: 'text-slate-600' 
-        };
+        return <BellIcon className="h-5 w-5" />;
     }
   };
 
-  const handleCreateAlert = async (data) => {
-    try {
-      await api.post('/monitoreo/alertas', data);
-      setShowNewAlertForm(false);
-      loadData();
-    } catch (error) {
-      console.error('Error al crear alerta:', error);
+  const getSourceIcon = (type) => {
+    switch (type) {
+      case 'ANAC_AR':
+        return <DocumentTextIcon className="h-5 w-5" />;
+      case 'BOLETIN_OFICIAL':
+        return <DocumentTextIcon className="h-5 w-5" />;
+      case 'WEB_SCRAPING':
+        return <LinkIcon className="h-5 w-5" />;
+      default:
+        return <BellIcon className="h-5 w-5" />;
     }
   };
 
-  if (loading) return <Loading />;
-
-  const canEdit = user?.role === 'admin' || user?.role === 'editor';
+  if (loading) return <Loading message="Cargando sistema de monitoreo..." />;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Monitoreo Estratégico</h1>
-          <p className="text-slate-600">Sistema de vigilancia regulatoria y oportunidades</p>
-        </div>
-        {canEdit && (
-          <Button onClick={() => setShowNewAlertForm(true)}>
-            + Nueva Alerta Manual
+      {/* Header */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Monitoreo Estratégico ANAC
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Sistema de alertas regulatorias y cambios normativos
+            </p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            loading={refreshing}
+            icon={RefreshIcon}
+            variant="secondary"
+          >
+            Actualizar fuentes
           </Button>
-        )}
+        </div>
       </div>
 
-      {/* Protocolo de Activación */}
-      <Card className="bg-slate-50">
-        <h2 className="text-lg font-semibold mb-4">Protocolo de Activación</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded border border-green-200">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🟢</span>
-              <h3 className="font-semibold text-green-700">VERDE</h3>
-            </div>
-            <p className="text-sm text-slate-600">
-              Información general. Monitoreo continuo sin activar protocolo especial.
-            </p>
-          </div>
-          
-          <div className="bg-white p-4 rounded border border-yellow-200">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🟡</span>
-              <h3 className="font-semibold text-yellow-700">AMARILLO</h3>
-            </div>
-            <p className="text-sm text-slate-600">
-              Cambios relevantes. Evaluar con equipo en 24h, revisar impacto en sistemas.
-            </p>
-          </div>
-          
-          <div className="bg-white p-4 rounded border border-red-200">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🔴</span>
-              <h3 className="font-semibold text-red-700">ROJO</h3>
-            </div>
-            <p className="text-sm text-slate-600">
-              Evento crítico. Reunión inmediata, posible alteración de prioridades.
-            </p>
-          </div>
-        </div>
-      </Card>
+      {/* Mensajes */}
+      {error && <Alert type="error" message={error} onClose={() => setError('')} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess('')} />}
 
-      {/* Filtros y estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Total Alertas</p>
-          <p className="text-2xl font-bold text-slate-900">{alertas.length}</p>
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Total</p>
+          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
         </Card>
-        
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">No Leídas</p>
-          <p className="text-2xl font-bold text-blue-600">
-            {alertas.filter(a => !a.leida).length}
-          </p>
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Alta prioridad</p>
+          <p className="text-2xl font-bold text-red-600">{stats.high}</p>
         </Card>
-        
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Críticas</p>
-          <p className="text-2xl font-bold text-red-600">
-            {alertas.filter(a => a.prioridad === 'critica').length}
-          </p>
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Media prioridad</p>
+          <p className="text-2xl font-bold text-yellow-600">{stats.medium}</p>
         </Card>
-        
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Con Protocolo</p>
-          <p className="text-2xl font-bold text-green-600">
-            {alertas.filter(a => a.protocolo).length}
-          </p>
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Baja prioridad</p>
+          <p className="text-2xl font-bold text-blue-600">{stats.low}</p>
+        </Card>
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Activas</p>
+          <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+        </Card>
+        <Card className="text-center">
+          <p className="text-sm text-gray-600">Archivadas</p>
+          <p className="text-2xl font-bold text-gray-600">{stats.archived}</p>
         </Card>
       </div>
 
       {/* Filtros */}
-      <Card className="p-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setFiltro('todas')}
-            className={`px-4 py-2 rounded ${
-              filtro === 'todas'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Todas
-          </button>
-          <button
-            onClick={() => setFiltro('critica')}
-            className={`px-4 py-2 rounded ${
-              filtro === 'critica'
-                ? 'bg-red-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Críticas
-          </button>
-          <button
-            onClick={() => setFiltro('importante')}
-            className={`px-4 py-2 rounded ${
-              filtro === 'importante'
-                ? 'bg-orange-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Importantes
-          </button>
-          <button
-            onClick={() => setFiltro('normal')}
-            className={`px-4 py-2 rounded ${
-              filtro === 'normal'
-                ? 'bg-green-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Normales
-          </button>
+      <Card>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <FilterIcon className="h-5 w-5 mr-2" />
+            Filtros
+          </h2>
+          <div className="flex space-x-2">
+            <Button
+              size="small"
+              variant={filter === 'all' ? 'primary' : 'secondary'}
+              onClick={() => setFilter('all')}
+            >
+              Todas
+            </Button>
+            <Button
+              size="small"
+              variant={filter === 'active' ? 'primary' : 'secondary'}
+              onClick={() => setFilter('active')}
+            >
+              Activas
+            </Button>
+            <Button
+              size="small"
+              variant={filter === 'archived' ? 'primary' : 'secondary'}
+              onClick={() => setFilter('archived')}
+            >
+              Archivadas
+            </Button>
+          </div>
         </div>
       </Card>
 
       {/* Lista de Alertas */}
-      <div className="space-y-4">
-        {alertas.length === 0 ? (
-          <Card className="p-8 text-center text-slate-500">
-            No hay alertas para mostrar
-          </Card>
-        ) : (
-          alertas.map((alerta) => {
-            const protocoloInfo = getProtocoloInfo(alerta.protocolo);
-            return (
-              <Card
-                key={alerta.id}
-                className={`p-6 ${!alerta.leida ? 'border-l-4 border-blue-500' : ''}`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        {alerta.titulo}
-                      </h3>
-                      <span className={`px-2 py-1 rounded text-xs font-medium border ${getPrioridadColor(alerta.prioridad)}`}>
-                        {alerta.prioridad.toUpperCase()}
-                      </span>
-                      {alerta.protocolo && (
-                        <span className={`flex items-center gap-1 text-sm font-medium ${protocoloInfo.color}`}>
-                          {protocoloInfo.emoji} {protocoloInfo.text}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <p className="text-slate-700 mb-3">{alerta.descripcion}</p>
-                    
-                    <div className="flex items-center gap-4 text-sm text-slate-500">
-                      <span>Fuente: {alerta.fuente}</span>
-                      <span>•</span>
-                      <span>{new Date(alerta.fecha).toLocaleDateString('es-AR')}</span>
-                      {alerta.enlace && (
-                        <>
-                          <span>•</span>
-                          
-                            href={alerta.enlace}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Ver fuente
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {!alerta.leida && (
-                    <Button
-                      onClick={() => handleMarcarLeida(alerta.id)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Marcar como leída
-                    </Button>
-                  )}
-                </div>
-
-                {/* Acciones de protocolo */}
-                {canEdit && !alerta.protocolo && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <p className="text-sm font-medium text-slate-700 mb-2">
-                      Activar protocolo:
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleActivarProtocolo(alerta.id, 'verde')}
-                        variant="secondary"
-                        size="sm"
-                        className="hover:bg-green-100"
-                      >
-                        🟢 Verde
-                      </Button>
-                      <Button
-                        onClick={() => handleActivarProtocolo(alerta.id, 'amarillo')}
-                        variant="secondary"
-                        size="sm"
-                        className="hover:bg-yellow-100"
-                      >
-                        🟡 Amarillo
-                      </Button>
-                      <Button
-                        onClick={() => handleActivarProtocolo(alerta.id, 'rojo')}
-                        variant="secondary"
-                        size="sm"
-                        className="hover:bg-red-100"
-                      >
-                        🔴 Rojo
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })
-        )}
-      </div>
-
-      {/* Fuentes Monitoreadas */}
       <Card>
-        <h2 className="text-lg font-semibold mb-4">Fuentes Monitoreadas</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {fuentes.map((fuente) => (
-            <div key={fuente.id} className="flex justify-between items-center p-3 bg-slate-50 rounded">
-              <div>
-                <p className="font-medium">{fuente.nombre}</p>
-                <p className="text-sm text-slate-500">{fuente.url}</p>
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Alertas Regulatorias
+          </h2>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {alerts.length > 0 ? (
+            alerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-3">
+                    <div className={`text-${getPriorityColor(alert.priority)}-500`}>
+                      {getPriorityIcon(alert.priority)}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-gray-900">
+                        {alert.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {alert.description}
+                      </p>
+                      <div className="flex items-center space-x-4 mt-2">
+                        <Badge variant={getPriorityColor(alert.priority)}>
+                          {alert.priority === 'high' ? 'Alta' : 
+                           alert.priority === 'medium' ? 'Media' : 'Baja'}
+                        </Badge>
+                        <span className="text-xs text-gray-500 flex items-center">
+                          {getSourceIcon(alert.source)}
+                          <span className="ml-1">{alert.source}</span>
+                        </span>
+                        <span className="text-xs text-gray-500 flex items-center">
+                          <CalendarIcon className="h-4 w-4 mr-1" />
+                          {new Date(alert.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      onClick={() => handleViewAlert(alert)}
+                    >
+                      Ver detalles
+                    </Button>
+                    {alert.status === 'active' && (
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={() => handleArchiveAlert(alert.id)}
+                        icon={XCircleIcon}
+                      >
+                        Archivar
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <span className={`text-sm px-2 py-1 rounded ${
-                fuente.activa
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-slate-100 text-slate-800'
-              }`}>
-                {fuente.activa ? 'Activa' : 'Inactiva'}
-              </span>
+            ))
+          ) : (
+            <div className="p-8 text-center text-gray-500">
+              No hay alertas {filter !== 'all' ? filter === 'active' ? 'activas' : 'archivadas' : ''} en este momento
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Fuentes de Monitoreo */}
+      <Card>
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Fuentes de Monitoreo
+          </h2>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {sources.map((source) => (
+            <div key={source.id} className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="text-gray-400">
+                    {getSourceIcon(source.type)}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      {source.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {source.url}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <Badge variant={source.active ? 'green' : 'gray'}>
+                    {source.active ? 'Activa' : 'Inactiva'}
+                  </Badge>
+                  <span className="text-xs text-gray-500">
+                    Última verificación: {new Date(source.lastCheck).toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Modal Nueva Alerta */}
-      {showNewAlertForm && (
-        <NewAlertModal
-          onClose={() => setShowNewAlertForm(false)}
-          onSubmit={handleCreateAlert}
-        />
-      )}
-    </div>
-  );
-};
+      {/* Modal de Detalles */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Detalles de la Alerta"
+      >
+        {selectedAlert && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                {selectedAlert.title}
+              </h3>
+              <Badge variant={getPriorityColor(selectedAlert.priority)} className="mt-2">
+                Prioridad {selectedAlert.priority === 'high' ? 'Alta' : 
+                          selectedAlert.priority === 'medium' ? 'Media' : 'Baja'}
+              </Badge>
+            </div>
+            
+            <div>
+              <h4 className="text-sm font-medium text-gray-700">Descripción</h4>
+              <p className="mt-1 text-sm text-gray-600">
+                {selectedAlert.description}
+              </p>
+            </div>
 
-// Modal para crear nueva alerta manual
-const NewAlertModal = ({ onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    titulo: '',
-    descripcion: '',
-    prioridad: 'normal',
-    fuente: 'Manual',
-    enlace: ''
-  });
+            {selectedAlert.details && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-700">Detalles adicionales</h4>
+                <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
+                  {selectedAlert.details}
+                </p>
+              </div>
+            )}
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-gray-700">Fuente:</span>
+                <span className="ml-2 text-gray-600">{selectedAlert.source}</span>
+              </div>
+              <div>
+                <span className="font-medium text-gray-700">Estado:</span>
+                <span className="ml-2 text-gray-600">
+                  {selectedAlert.status === 'active' ? 'Activa' : 'Archivada'}
+                </span>
+              </div>
+              <div>
+                <span className="font-medium text-gray-700">Creada:</span>
+                <span className="ml-2 text-gray-600">
+                  {new Date(selectedAlert.createdAt).toLocaleString()}
+                </span>
+              </div>
+              {selectedAlert.url && (
+                <div>
+                  <span className="font-medium text-gray-700">URL:</span>
+                  <a 
+                    href={selectedAlert.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ml-2 text-blue-600 hover:underline"
+                  >
+                    Ver fuente
+                  </a>
+                </div>
+              )}
+            </div>
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h2 className="text-xl font-semibold mb-4">Nueva Alerta Manual</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="form-label">Título *</label>
-            <input
-              type="text"
-              className="form-input"
-              value={formData.titulo}
-              onChange={(e) => setFormData({...formData, titulo: e.target.value})}
-              required
-            />
+            <div className="mt-6 flex justify-end space-x-3">
+              <Button
+                variant="secondary"
+                onClick={() => setShowModal(false)}
+              >
+                Cerrar
+              </Button>
+              {selectedAlert.status === 'active' && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    handleArchiveAlert(selectedAlert.id);
+                    setShowModal(false);
+                  }}
+                >
+                  Archivar alerta
+                </Button>
+              )}
+            </div>
           </div>
-
-          <div>
-            <label className="form-label">Descripción *</label>
-            <textarea
-              className="form-input"
-              rows="3"
-              value={formData.descripcion}
-              onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="form-label">Prioridad</label>
-            <select
-              className="form-input"
-              value={formData.prioridad}
-              onChange={(e) => setFormData({...formData, prioridad: e.target.value})}
-            >
-              <option value="normal">Normal</option>
-              <option value="importante">Importante</option>
-              <option value="critica">Crítica</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="form-label">Enlace (opcional)</label>
-            <input
-              type="url"
-              className="form-input"
-              value={formData.enlace}
-              onChange={(e) => setFormData({...formData, enlace: e.target.value})}
-              placeholder="https://..."
-            />
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              Crear Alerta
-            </Button>
-          </div>
-        </form>
-      </div>
+        )}
+      </Modal>
     </div>
   );
 };
