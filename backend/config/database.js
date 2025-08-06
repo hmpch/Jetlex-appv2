@@ -7,10 +7,10 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     collate: 'utf8mb4_unicode_ci',
   },
   pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
+    max: parseInt(process.env.DB_POOL_MAX) || 10,
+    min: parseInt(process.env.DB_POOL_MIN) || 0,
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 30000,
+    idle: parseInt(process.env.DB_POOL_IDLE) || 10000
   },
   logging: process.env.NODE_ENV === 'development' ? console.log : false
 });

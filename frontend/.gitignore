@@ -1,0 +1,31 @@
+# Ignorar dependencias instaladas
+node_modules/
+
+# Archivos de entorno con credenciales
+.env
+*.local
+
+# Bases de datos locales / ficheros de datos
+*.sqlite
+*.db
+
+# Logs y reportes de errores
+debug.log
+npm-debug.log*
+*.log
+
+# Generados por el sistema operativo y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archivos de compilación o producción
+dist/
+build/
+
+# Otros temporales
+*.tmp
+
+# Cobertura de tests
+coverage/
