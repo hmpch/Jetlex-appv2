@@ -1,24 +1,30 @@
+// frontend/src/components/Layout/Layout.js
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import Header from './Header';
 import Sidebar from './Sidebar';
-import Footer from './Footer';
+import Header from './Header';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Layout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
+    <div className="flex h-screen bg-slate-50">
+      {/* Sidebar */}
+      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
-        <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      {/* Contenido principal */}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${
+        sidebarOpen ? 'ml-64' : 'ml-20'
+      }`}>
+        {/* Header */}
+        <Header user={user} onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         
-        <main className="p-6 min-h-screen">
+        {/* Área de contenido */}
+        <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
-        
-        <Footer />
       </div>
     </div>
   );
