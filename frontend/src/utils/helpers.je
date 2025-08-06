@@ -1,0 +1,69 @@
+export const formatDate = (date) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString('es-AR');
+};
+
+export const formatDateTime = (date) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleString('es-AR');
+};
+
+export const formatCurrency = (amount) => {
+  if (!amount) return '$0';
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount);
+};
+
+export const capitalizeFirst = (str) => {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
+export const truncateText = (text, maxLength = 100) => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+export const getInitials = (name) => {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .map(word => word.charAt(0))
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+};
+
+export const calculateDaysUntil = (date) => {
+  if (!date) return null;
+  const today = new Date();
+  const targetDate = new Date(date);
+  const diffTime = targetDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+export const getUrgencyColor = (urgencia) => {
+  const colors = {
+    critica: 'text-red-600 bg-red-100',
+    alta: 'text-orange-600 bg-orange-100',
+    media: 'text-yellow-600 bg-yellow-100',
+    baja: 'text-green-600 bg-green-100'
+  };
+  return colors[urgencia] || 'text-gray-600 bg-gray-100';
+};
+
+export const getEstadoColor = (estado) => {
+  const colors = {
+    completado: 'text-green-600 bg-green-100',
+    en_proceso: 'text-blue-600 bg-blue-100',
+    pendiente_anac: 'text-yellow-600 bg-yellow-100',
+    bloqueado: 'text-red-600 bg-red-100',
+    cancelado: 'text-gray-600 bg-gray-100',
+    borrador: 'text-purple-600 bg-purple-100'
+  };
+  return colors[estado] || 'text-gray-600 bg-gray-100';
+};

@@ -1,0 +1,16 @@
+/*
+  Este es el archivo CSS principal de la aplicación.
+  Importa las directivas de Tailwind y luego nuestros estilos personalizados.
+*/
+@import './tailwind.css';
+@import './App.css';
+@import './components.css';
+
+/* Estilos base para el cuerpo de la página */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc; /* Corresponde a --slate-50 */
+  color: #334155; /* Corresponde a --slate-700 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
